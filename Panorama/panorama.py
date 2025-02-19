@@ -1,20 +1,41 @@
 import numpy as np
 import cv2 
 import imutils
+import base64
+from io import BytesIO
 
-# images - an array of images to be stitched together
+# base64 image string to an OpenCV image
+def decode_image(base64_string):
+    # decode to bytes
+    img_data = base64.b64decode(base64_string)
+    
+    # convert to numpy array
+    np_img = np.frombuffer(img_data, dtype=np.uint8)
+    
+    # return numpy array as an OpenCV image
+    return cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+
+# openCV image to base64 string
+def encode_image(img):
+    # encode to JPEG
+    _, buffer = cv2.imencode('.jpg', img)
+
+    # convert to bytes
+    img_bytes = buffer.tobytes()
+    return base64.b64encode(img_bytes).decode('utf-8')
+
+# images - list of base64 encoded image strings
 # yaw - a value from -3.14 rad to 3.14 rad representing direction (0 = North)
 # requires compass.png to be in same directory
 def stitch_panorama(images, yaw=None): 
 
+    decoded_images = [decode_image(img) for img in images]
+
     panorama = cv2.Stitcher_create()
 
-    error, stitched_img = panorama.stitch(images)
+    error, stitched_img = panorama.stitch(decoded_images)
 
     if not error:
-
-        cv2.imwrite("Panorama.jpg", stitched_img)
-
         # adding border 10px black border
         stitched_img = cv2.copyMakeBorder(stitched_img, 10, 10, 10, 10, cv2.BORDER_CONSTANT, (0,0,0))
 
@@ -49,8 +70,8 @@ def stitch_panorama(images, yaw=None):
         stitched_img = stitched_img[y:y + h, x:x + w]
 
         # no compass if yaw isn't inputed
-        if (yaw = None): 
-            return stitched_img
+        if (yaw == None): 
+            return encode_image(stitched_img)
 
         # adding and rotating compass
         compass = cv2.imread("compass.png", cv2.IMREAD_UNCHANGED)
@@ -89,7 +110,7 @@ def stitch_panorama(images, yaw=None):
             # overlay directly if non-transparent
             stitched_img[y_offset:y_offset + compass_height, x_offset:x_offset + compass_width] = rotated_compass
 
-        return stitched_img
+        return encode_image(stitched_img)
         
     else:
         # can't find enough points to stitch photos together
